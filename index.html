@@ -188,6 +188,56 @@
             height: 400px;
             margin-top: 20px;
         }
+
+        .debug-panel {
+            margin-top: 30px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0 16px 16px 16px;
+            color: #374151;
+            font-size: 0.95em;
+        }
+
+        .debug-panel summary {
+            cursor: pointer;
+            font-weight: 600;
+            padding: 14px 0;
+            list-style: none;
+            outline: none;
+        }
+
+        .debug-panel summary::marker {
+            display: none;
+        }
+
+        .debug-panel summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .debug-panel summary::before {
+            content: '\25BC';
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 0.8em;
+            transition: transform 0.2s ease;
+        }
+
+        .debug-panel[open] summary::before {
+            transform: rotate(180deg);
+        }
+
+        .debug-panel pre {
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #fff;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            margin: 0;
+            max-height: 240px;
+        }
         
         .student-info {
             background: #f9fafb;
@@ -261,9 +311,13 @@
             </div>
             <div id="loadingGrades" class="loading" style="display: none;">Loading grades...</div>
             <div id="errorGrades" class="error" style="display: none;"></div>
+            <details id="gradeDebugPanel" class="debug-panel">
+                <summary>Webhook debug details</summary>
+                <pre id="gradeDebugInfo">No grade requests made yet.</pre>
+            </details>
         </div>
     </div>
-    
+
     <script>
         const CONFIG = {
             AIRTABLE_API_KEY: 'patCUB0HwqgJr9nOr.d93cc816ba0e0dc0c22bbe5eaada139d84f864256b401446d1c2726da1247b4f',
@@ -444,16 +498,25 @@
         async function loadGrades() {
             const loadingEl = document.getElementById('loadingGrades');
             const errorEl = document.getElementById('errorGrades');
-            
+
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
-            
+
             try {
                 const requestBody = {
                     studentId: selectedStudent.id,
                     sectionId: selectedSection.sectionId
                 };
-                
+
+                updateDebugPanel({
+                    stage: 'request',
+                    request: {
+                        url: CONFIG.N8N_WEBHOOK_URL,
+                        method: 'POST',
+                        body: requestBody
+                    }
+                });
+
                 const response = await fetch(CONFIG.N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: {
@@ -463,6 +526,21 @@
                 });
 
                 const responseText = await response.text();
+
+                updateDebugPanel({
+                    stage: 'response',
+                    request: {
+                        url: CONFIG.N8N_WEBHOOK_URL,
+                        method: 'POST',
+                        body: requestBody
+                    },
+                    response: {
+                        status: response.status,
+                        ok: response.ok,
+                        headers: Object.fromEntries(response.headers.entries()),
+                        bodyPreview: responseText.slice(0, 1000)
+                    }
+                });
 
                 if (!response.ok) {
                     let message = responseText;
@@ -481,15 +559,57 @@
                 try {
                     data = JSON.parse(responseText);
                 } catch (parseError) {
+                    updateDebugPanel({
+                        stage: 'parse-error',
+                        request: {
+                            url: CONFIG.N8N_WEBHOOK_URL,
+                            method: 'POST',
+                            body: requestBody
+                        },
+                        response: {
+                            status: response.status,
+                            ok: response.ok,
+                            bodyPreview: responseText.slice(0, 1000)
+                        },
+                        error: parseError.message
+                    });
                     throw new Error('Invalid JSON response from server');
                 }
-                
+
                 const assignments = normalizeGradePayload(data);
 
                 if (!assignments || assignments.length === 0) {
                     const preview = responseText.slice(0, 250).trim();
+                    updateDebugPanel({
+                        stage: 'empty-result',
+                        request: {
+                            url: CONFIG.N8N_WEBHOOK_URL,
+                            method: 'POST',
+                            body: requestBody
+                        },
+                        response: {
+                            status: response.status,
+                            ok: response.ok,
+                            bodyPreview: responseText.slice(0, 1000)
+                        }
+                    });
                     throw new Error('No grade data received from server. Response preview: ' + preview);
                 }
+
+                updateDebugPanel({
+                    stage: 'success',
+                    request: {
+                        url: CONFIG.N8N_WEBHOOK_URL,
+                        method: 'POST',
+                        body: requestBody
+                    },
+                    response: {
+                        status: response.status,
+                        ok: response.ok,
+                        bodyPreview: responseText.slice(0, 1000)
+                    },
+                    extractedAssignments: assignments.length
+                });
 
                 displayGrades(assignments);
                 loadingEl.style.display = 'none';
@@ -498,7 +618,41 @@
                 errorEl.textContent = 'Error loading grades: ' + error.message;
                 errorEl.style.display = 'block';
                 loadingEl.style.display = 'none';
+                updateDebugPanel({
+                    stage: 'error',
+                    error: error.message
+                });
             }
+        }
+
+        function updateDebugPanel(event) {
+            const debugInfoEl = document.getElementById('gradeDebugInfo');
+            if (!debugInfoEl) {
+                return;
+            }
+
+            const timestamp = new Date().toISOString();
+            let existing = [];
+            if (debugInfoEl.dataset.debugHistory) {
+                try {
+                    existing = JSON.parse(debugInfoEl.dataset.debugHistory);
+                } catch (historyError) {
+                    console.warn('Unable to parse existing debug history', historyError);
+                    existing = [];
+                }
+            }
+
+            const record = {
+                timestamp,
+                ...event
+            };
+
+            existing.push(record);
+            if (existing.length > 10) {
+                existing = existing.slice(existing.length - 10);
+            }
+            debugInfoEl.dataset.debugHistory = JSON.stringify(existing);
+            debugInfoEl.textContent = JSON.stringify(existing, null, 2);
         }
 
         function normalizeGradePayload(raw) {
