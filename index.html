@@ -406,6 +406,7 @@
                 const data = await airtableRequest(CONFIG.TABLES.STUDENTS);
                 allStudents = data.records.map(record => ({
                     id: record.id,
+                    studentNumber: record.fields['ID'] ?? null,
                     name: record.fields['Name'] || '',
                     email: record.fields['Email'] || '',
                     firstName: record.fields['First Name'] || '',
@@ -545,8 +546,14 @@
             errorEl.style.display = 'none';
 
             try {
+                if (selectedStudent.studentNumber == null) {
+                    const message = 'This student is missing the numeric "ID" field in Airtable. Please add it to Student Roster → ID.';
+                    updateDebugPanel({ stage: 'validation-error', error: message });
+                    throw new Error(message);
+                }
+
                 const requestBody = {
-                    studentId: selectedStudent.id,
+                    studentId: selectedStudent.studentNumber,
                     sectionId: selectedSection.sectionId
                 };
 
