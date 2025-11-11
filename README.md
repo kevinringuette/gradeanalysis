@@ -25,6 +25,8 @@ If you need to keep the Airtable API key private, consider migrating the data re
 
 ## Webhook troubleshooting
 
-The grade view now includes a **Webhook debug details** accordion under the chart. Each time you click a section it records the
-request payload, response status, headers, and a preview of the returned JSON. If a failure occurs the panel appends an error e
-ntry so you can quickly confirm whether the webhook responded (and what it sent back) without opening the browser console.
+The grade view now includes a **Webhook debug details** panel under the chart. The panel automatically opens after the first request and displays the payload, status code, headers, and a compact preview of the JSON returned from your n8n workflow. Use the toggle button to collapse or expand the history.
+
+If a request fails (for example due to a `404` or JSON parse error) the panel highlights in red, expands automatically, and lists the most recent stages so you can confirm whether the webhook responded and what the server returned without digging through the browser console. The last status label in the panel header mirrors the most recent stage so it is easy to spot problems such as `parse error` or `empty result`.
+
+> **Note:** Some browsers currently warn about a `Permissions-Policy` header that includes the `browsing-topics` feature. That header is emitted by n8n; the warning is benign, and you can inspect the raw headers inside the debug panel to verify the response you received.

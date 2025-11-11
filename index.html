@@ -197,34 +197,56 @@
             padding: 0 16px 16px 16px;
             color: #374151;
             font-size: 0.95em;
+            transition: border-color 0.2s ease;
         }
 
-        .debug-panel summary {
-            cursor: pointer;
-            font-weight: 600;
+        .debug-panel--hidden {
+            display: none;
+        }
+
+        .debug-panel--error {
+            border-color: #f87171;
+        }
+
+        .debug-panel__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
             padding: 14px 0;
-            list-style: none;
-            outline: none;
         }
 
-        .debug-panel summary::marker {
+        .debug-panel__title {
+            font-weight: 600;
+        }
+
+        .debug-panel__actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .debug-panel__status {
+            font-size: 0.85em;
+            color: #4b5563;
+        }
+
+        .debug-toggle {
+            background: #111827;
+            color: #f9fafb;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+
+        .debug-toggle:hover {
+            background: #1f2937;
+        }
+
+        .debug-panel--collapsed pre {
             display: none;
-        }
-
-        .debug-panel summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .debug-panel summary::before {
-            content: '\25BC';
-            display: inline-block;
-            margin-right: 8px;
-            font-size: 0.8em;
-            transition: transform 0.2s ease;
-        }
-
-        .debug-panel[open] summary::before {
-            transform: rotate(180deg);
         }
 
         .debug-panel pre {
@@ -236,7 +258,7 @@
             border: 1px solid #e5e7eb;
             padding: 12px;
             margin: 0;
-            max-height: 240px;
+            max-height: 260px;
         }
         
         .student-info {
@@ -311,10 +333,16 @@
             </div>
             <div id="loadingGrades" class="loading" style="display: none;">Loading grades...</div>
             <div id="errorGrades" class="error" style="display: none;"></div>
-            <details id="gradeDebugPanel" class="debug-panel">
-                <summary>Webhook debug details</summary>
+            <div id="gradeDebugPanel" class="debug-panel debug-panel--hidden debug-panel--collapsed" aria-live="polite">
+                <div class="debug-panel__header">
+                    <span class="debug-panel__title">Webhook debug details</span>
+                    <div class="debug-panel__actions">
+                        <span id="gradeDebugStatus" class="debug-panel__status">Idle</span>
+                        <button type="button" id="gradeDebugToggle" class="debug-toggle" aria-expanded="false">Expand</button>
+                    </div>
+                </div>
                 <pre id="gradeDebugInfo">No grade requests made yet.</pre>
-            </details>
+            </div>
         </div>
     </div>
 
@@ -333,6 +361,20 @@
         let selectedStudent = null;
         let selectedSection = null;
         let chart = null;
+
+        const debugPanelEl = document.getElementById('gradeDebugPanel');
+        const debugInfoEl = document.getElementById('gradeDebugInfo');
+        const debugToggleEl = document.getElementById('gradeDebugToggle');
+        const debugStatusEl = document.getElementById('gradeDebugStatus');
+        let debugHistory = [];
+
+        if (debugToggleEl && debugPanelEl) {
+            debugToggleEl.addEventListener('click', () => {
+                const isCollapsed = debugPanelEl.classList.toggle('debug-panel--collapsed');
+                debugToggleEl.textContent = isCollapsed ? 'Expand' : 'Collapse';
+                debugToggleEl.setAttribute('aria-expanded', (!isCollapsed).toString());
+            });
+        }
         
         async function airtableRequest(tableId, params = {}) {
             const url = new URL(`https://api.airtable.com/v0/${CONFIG.AIRTABLE_BASE_ID}/${tableId}`);
@@ -625,34 +667,116 @@
             }
         }
 
+        function ensureDebugPanelVisible() {
+            if (!debugPanelEl) {
+                return;
+            }
+            debugPanelEl.classList.remove('debug-panel--hidden');
+        }
+
+        function indentLines(value, indent = '      ') {
+            if (value === undefined) {
+                return `${indent}undefined`;
+            }
+            if (value === null) {
+                return `${indent}null`;
+            }
+            if (typeof value === 'string') {
+                return value
+                    .split('\n')
+                    .map(line => `${indent}${line}`)
+                    .join('\n');
+            }
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value, null, 2)
+                        .split('\n')
+                        .map(line => `${indent}${line}`)
+                        .join('\n');
+                } catch (error) {
+                    return `${indent}[unserializable value]`;
+                }
+            }
+            return `${indent}${value}`;
+        }
+
+        function formatSection(label, value) {
+            return `${label}\n${indentLines(value)}`;
+        }
+
+        function formatStage(stage) {
+            if (!stage) {
+                return 'update';
+            }
+            return stage.replace(/-/g, ' ');
+        }
+
+        function formatDebugHistory(history) {
+            return history.map((entry, index) => {
+                const lines = [`${index + 1}. [${entry.timestamp}] stage: ${formatStage(entry.stage)}`];
+                if (entry.error) {
+                    lines.push(`   error: ${entry.error}`);
+                }
+                if (entry.request) {
+                    lines.push(formatSection('   request', entry.request));
+                }
+                if (entry.response) {
+                    lines.push(formatSection('   response', entry.response));
+                }
+                if (entry.extractedAssignments !== undefined) {
+                    lines.push(`   extractedAssignments: ${entry.extractedAssignments}`);
+                }
+                return lines.join('\n');
+            }).join('\n\n');
+        }
+
         function updateDebugPanel(event) {
-            const debugInfoEl = document.getElementById('gradeDebugInfo');
-            if (!debugInfoEl) {
+            if (!debugPanelEl || !debugInfoEl) {
                 return;
             }
 
-            const timestamp = new Date().toISOString();
-            let existing = [];
-            if (debugInfoEl.dataset.debugHistory) {
-                try {
-                    existing = JSON.parse(debugInfoEl.dataset.debugHistory);
-                } catch (historyError) {
-                    console.warn('Unable to parse existing debug history', historyError);
-                    existing = [];
-                }
-            }
+            ensureDebugPanelVisible();
 
-            const record = {
+            const timestamp = new Date().toISOString();
+            const entry = {
                 timestamp,
                 ...event
             };
 
-            existing.push(record);
-            if (existing.length > 10) {
-                existing = existing.slice(existing.length - 10);
+            debugHistory.push(entry);
+            if (debugHistory.length > 20) {
+                debugHistory = debugHistory.slice(debugHistory.length - 20);
             }
-            debugInfoEl.dataset.debugHistory = JSON.stringify(existing);
-            debugInfoEl.textContent = JSON.stringify(existing, null, 2);
+
+            debugInfoEl.textContent = formatDebugHistory(debugHistory);
+
+            if (debugStatusEl) {
+                const statusLabel = event.stage ? formatStage(event.stage) : (event.error ? 'error' : 'update');
+                debugStatusEl.textContent = statusLabel;
+            }
+
+            if (event.stage === 'request') {
+                debugPanelEl.classList.remove('debug-panel--error');
+            }
+
+            const isErrorStage = Boolean(event.stage && event.stage.includes('error'));
+
+            if (isErrorStage || event.stage === 'error' || event.error) {
+                debugPanelEl.classList.add('debug-panel--error');
+                if (debugToggleEl && debugPanelEl.classList.contains('debug-panel--collapsed')) {
+                    debugPanelEl.classList.remove('debug-panel--collapsed');
+                    debugToggleEl.textContent = 'Collapse';
+                    debugToggleEl.setAttribute('aria-expanded', 'true');
+                }
+            } else if (event.stage === 'success') {
+                debugPanelEl.classList.remove('debug-panel--error');
+            }
+
+            if (debugHistory.length === 1 && debugToggleEl && debugPanelEl.classList.contains('debug-panel--collapsed')) {
+                debugPanelEl.classList.remove('debug-panel--collapsed');
+                debugToggleEl.textContent = 'Collapse';
+                debugToggleEl.setAttribute('aria-expanded', 'true');
+            }
         }
 
         function normalizeGradePayload(raw) {
