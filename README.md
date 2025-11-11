@@ -22,3 +22,11 @@ The project is ready to deploy as a static site on Vercel:
 3. Deploy; Vercel will automatically serve `index.html` from the project root.
 
 If you need to keep the Airtable API key private, consider migrating the data requests to a Vercel serverless function or a secure API proxy.
+
+## Webhook troubleshooting
+
+The grade view now includes a **Webhook debug details** panel under the chart. The panel automatically opens after the first request and displays the payload, status code, headers, and a compact preview of the JSON returned from your n8n workflow. Use the toggle button to collapse or expand the history.
+
+If a request fails (for example due to a `404` or JSON parse error) the panel highlights in red, expands automatically, and lists the most recent stages so you can confirm whether the webhook responded and what the server returned without digging through the browser console. The last status label in the panel header mirrors the most recent stage so it is easy to spot problems such as `parse error` or `empty result`.
+
+> **Note:** Some browsers currently warn about a `Permissions-Policy` header that includes the `browsing-topics` feature. That header is emitted by n8n; the warning is benign, and you can inspect the raw headers inside the debug panel to verify the response you received.
