@@ -362,6 +362,59 @@
         let selectedSection = null;
         let chart = null;
 
+        function normalizeTypeName(name) {
+            if (typeof name === 'string') {
+                const trimmed = name.trim();
+                if (trimmed.length > 0) {
+                    return trimmed;
+                }
+            }
+            return 'Other';
+        }
+
+        const PRESET_TYPE_COLORS = {
+            'Exam': { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#ef4444' },
+            'Quiz': { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6' },
+            'Homework': { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#059669' }
+        };
+
+        const FALLBACK_TYPE_COLORS = [
+            { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)', text: '#b45309' },
+            { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)', text: '#6d28d9' },
+            { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.12)', text: '#be185d' },
+            { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)', text: '#0e7490' },
+            { border: '#f97316', bg: 'rgba(249, 115, 22, 0.12)', text: '#c2410c' },
+            { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)', text: '#15803d' }
+        ];
+
+        let fallbackColorIndex = 0;
+        const typeColorAssignments = new Map();
+
+        function cloneColorConfig(color) {
+            return {
+                border: color.border,
+                bg: color.bg,
+                text: color.text || color.border
+            };
+        }
+
+        function getTypeColors(typeName) {
+            const normalized = normalizeTypeName(typeName);
+            if (typeColorAssignments.has(normalized)) {
+                return typeColorAssignments.get(normalized);
+            }
+
+            let base = PRESET_TYPE_COLORS[normalized];
+            if (!base) {
+                base = FALLBACK_TYPE_COLORS[fallbackColorIndex % FALLBACK_TYPE_COLORS.length];
+                fallbackColorIndex++;
+            }
+
+            const colors = cloneColorConfig(base);
+            typeColorAssignments.set(normalized, colors);
+            return colors;
+        }
+
         const debugPanelEl = document.getElementById('gradeDebugPanel');
         const debugInfoEl = document.getElementById('gradeDebugInfo');
         const debugToggleEl = document.getElementById('gradeDebugToggle');
@@ -874,7 +927,7 @@
 
             const statsByType = {};
             assignments.filter(a => a.points !== undefined).forEach(a => {
-                const type = a.assignment_type?.name || 'Other';
+                const type = normalizeTypeName(a.assignment_type?.name);
                 if (!statsByType[type]) {
                     statsByType[type] = [];
                 }
@@ -892,11 +945,19 @@
 
                 const stat = document.createElement('div');
                 stat.className = 'stat';
-                const typeClass = type.toLowerCase();
+                const colors = getTypeColors(type);
                 stat.innerHTML = `
-                    <div class="stat-value ${typeClass}">${avg.toFixed(1)}%</div>
+                    <div class="stat-value">${avg.toFixed(1)}%</div>
                     <div class="stat-label">${type}</div>
                 `;
+                if (colors) {
+                    stat.style.backgroundColor = colors.bg;
+                    stat.style.border = `1px solid ${colors.border}`;
+                    const statValue = stat.querySelector('.stat-value');
+                    if (statValue) {
+                        statValue.style.color = colors.text;
+                    }
+                }
                 statsContainer.appendChild(stat);
             });
 
@@ -924,7 +985,7 @@
                 return;
             }
             
-            const assignmentTypes = [...new Set(sortedAssignments.map(a => a.assignment_type?.name || 'Other'))];
+            const assignmentTypes = [...new Set(sortedAssignments.map(a => normalizeTypeName(a.assignment_type?.name)))];
 
             const allDates = [...new Set(sortedAssignments.map(a => {
                 const date = new Date(a.date_due || a.date_assigned);
@@ -944,7 +1005,7 @@
                 if (!assignmentsByDate[dateLabel]) {
                     assignmentsByDate[dateLabel] = {};
                 }
-                const typeName = a.assignment_type?.name || 'Other';
+                const typeName = normalizeTypeName(a.assignment_type?.name);
                 if (!assignmentsByDate[dateLabel][typeName]) {
                     assignmentsByDate[dateLabel][typeName] = [];
                 }
@@ -970,30 +1031,8 @@
                 });
             }
             
-            const colorMap = {
-                'Exam': { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
-                'Quiz': { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
-                'Homework': { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
-            };
-            
-            const defaultColors = [
-                { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-                { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
-                { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
-                { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)' }
-            ];
-            
-            let defaultColorIndex = 0;
-            
             const datasets = assignmentTypes.map((typeName) => {
-                let colors;
-                if (colorMap[typeName]) {
-                    colors = colorMap[typeName];
-                } else {
-                    colors = defaultColors[defaultColorIndex % defaultColors.length];
-                    defaultColorIndex++;
-                }
-                
+                const colors = getTypeColors(typeName);
                 return {
                     label: typeName,
                     data: getDataForType(typeName, allDates),
