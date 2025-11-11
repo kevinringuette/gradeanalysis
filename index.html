@@ -1306,18 +1306,14 @@
                             titleFont: { size: 14, weight: 'bold' },
                             displayColors: false,
                             callbacks: {
-                                title: function(context) {
-                                    return 'Date: ' + context[0].label;
-                                },
-                                beforeBody: function() {
-                                    return '';
-                                },
+                                title: () => null,
+                                beforeBody: () => '',
                                 afterBody: function(context) {
                                     const dateLabel = context[0].label;
                                     const allAssignmentsOnDate = assignmentsByDate[dateLabel];
-                                    
+
                                     if (!allAssignmentsOnDate) return [];
-                                    
+
                                     const lines = [];
                                     
                                     Object.keys(allAssignmentsOnDate).forEach(typeName => {
