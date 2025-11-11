@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Grade Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        
+        .screen {
+            display: none;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        h1 {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .search-box input:focus {
+            border-color: #667eea;
+        }
+        
+        .student-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .student-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .student-item:hover {
+            background: #f9fafb;
+        }
+        
+        .student-item:last-child {
+            border-bottom: none;
+        }
+        
+        .student-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .student-email {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .section-list {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .section-item {
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .section-item:hover {
+            border-color: #667eea;
+            background: #f9fafb;
+        }
+        
+        .section-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        
+        .back-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            font-size: 1em;
+        }
+        
+        .back-button:hover {
+            background: #5568d3;
+        }
+        
+        .grade {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .exam { color: #ef4444; }
+        .quiz { color: #3b82f6; }
+        .homework { color: #10b981; }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        
+        .student-info {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        
+        .student-info h2 {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .student-info p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 20px 10px;
+            }
+
+            .container {
+                padding: 25px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Screen 1: Student Search -->
+        <div id="studentSearchScreen" class="screen active">
+            <h1>Select Student</h1>
+            <div class="search-box">
+                <input type="text" id="studentSearch" placeholder="Start typing student name...">
+            </div>
+            <div id="studentListContainer" class="student-list"></div>
+            <div id="loadingStudents" class="loading" style="display: none;">Loading students...</div>
+            <div id="errorStudents" class="error" style="display: none;"></div>
+        </div>
+        
+        <!-- Screen 2: Section Selection -->
+        <div id="sectionSelectionScreen" class="screen">
+            <button class="back-button" onclick="goToStudentSearch()">← Back to Student Search</button>
+            <h1>Select Section</h1>
+            <div id="selectedStudentInfo" class="student-info"></div>
+            <div id="sectionListContainer" class="section-list"></div>
+            <div id="loadingSections" class="loading" style="display: none;">Loading sections...</div>
+            <div id="errorSections" class="error" style="display: none;"></div>
+        </div>
+        
+        <!-- Screen 3: Grade Visualization -->
+        <div id="gradeVisualizationScreen" class="screen">
+            <button class="back-button" onclick="goToSectionSelection()">← Back to Section Selection</button>
+            <h1>Student Progress</h1>
+            <div id="gradeStudentInfo" class="student-info"></div>
+            <div class="grade" id="overallGrade">--</div>
+            
+            <div class="stats" id="statsContainer">
+                <!-- Stats will be populated dynamically -->
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="progressChart"></canvas>
+            </div>
+            <div id="loadingGrades" class="loading" style="display: none;">Loading grades...</div>
+            <div id="errorGrades" class="error" style="display: none;"></div>
+        </div>
+    </div>
+    
+    <script>
+        const CONFIG = {
+            AIRTABLE_API_KEY: 'patCUB0HwqgJr9nOr.d93cc816ba0e0dc0c22bbe5eaada139d84f864256b401446d1c2726da1247b4f',
+            AIRTABLE_BASE_ID: 'appTwYDVvnYPB8D2N',
+            TABLES: {
+                STUDENTS: 'tblFr5ExAzNUYeLFU',
+                SECTIONS: 'tblk5aImbw2a8mAsL'
+            },
+            N8N_WEBHOOK_URL: 'https://kringuette0.app.n8n.cloud/webhook/a49b67da-21bd-4824-85cf-ecee179e15d6'
+        };
+        
+        let allStudents = [];
+        let selectedStudent = null;
+        let selectedSection = null;
+        let chart = null;
+        
+        async function airtableRequest(tableId, params = {}) {
+            const url = new URL(`https://api.airtable.com/v0/${CONFIG.AIRTABLE_BASE_ID}/${tableId}`);
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${CONFIG.AIRTABLE_API_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Airtable API error: ${response.statusText}`);
+            }
+            
+            return await response.json();
+        }
+        
+        async function loadStudents() {
+            const loadingEl = document.getElementById('loadingStudents');
+            const errorEl = document.getElementById('errorStudents');
+            const listEl = document.getElementById('studentListContainer');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            listEl.innerHTML = '';
+            
+            try {
+                const data = await airtableRequest(CONFIG.TABLES.STUDENTS);
+                allStudents = data.records.map(record => ({
+                    id: record.id,
+                    name: record.fields['Name'] || '',
+                    email: record.fields['Email'] || '',
+                    firstName: record.fields['First Name'] || '',
+                    lastName: record.fields['Last Name'] || '',
+                    sections: record.fields['Master Sections'] || []
+                }));
+                
+                allStudents.sort((a, b) => a.name.localeCompare(b.name));
+                displayStudents(allStudents);
+                loadingEl.style.display = 'none';
+            } catch (error) {
+                console.error('Error loading students:', error);
+                errorEl.textContent = 'Error loading students: ' + error.message;
+                errorEl.style.display = 'block';
+                loadingEl.style.display = 'none';
+            }
+        }
+        
+        function displayStudents(students) {
+            const listEl = document.getElementById('studentListContainer');
+            listEl.innerHTML = '';
+            
+            students.forEach(student => {
+                const item = document.createElement('div');
+                item.className = 'student-item';
+                item.innerHTML = `
+                    <div class="student-name">${student.name}</div>
+                    <div class="student-email">${student.email}</div>
+                `;
+                item.onclick = () => selectStudent(student);
+                listEl.appendChild(item);
+            });
+        }
+        
+        document.getElementById('studentSearch').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            if (searchTerm === '') {
+                displayStudents(allStudents);
+                return;
+            }
+            
+            const filtered = allStudents.filter(student => 
+                student.name.toLowerCase().includes(searchTerm) ||
+                student.email.toLowerCase().includes(searchTerm)
+            );
+            
+            filtered.sort((a, b) => {
+                const aStarts = a.name.toLowerCase().startsWith(searchTerm);
+                const bStarts = b.name.toLowerCase().startsWith(searchTerm);
+                if (aStarts && !bStarts) return -1;
+                if (!aStarts && bStarts) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            displayStudents(filtered);
+        });
+        
+        async function selectStudent(student) {
+            selectedStudent = student;
+            
+            document.getElementById('selectedStudentInfo').innerHTML = `
+                <h2>${student.name}</h2>
+                <p>${student.email}</p>
+            `;
+            
+            showScreen('sectionSelectionScreen');
+            await loadSections();
+        }
+        
+        async function loadSections() {
+            const loadingEl = document.getElementById('loadingSections');
+            const errorEl = document.getElementById('errorSections');
+            const listEl = document.getElementById('sectionListContainer');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            listEl.innerHTML = '';
+            
+            try {
+                if (!selectedStudent.sections || selectedStudent.sections.length === 0) {
+                    errorEl.textContent = 'This student is not enrolled in any sections.';
+                    errorEl.style.display = 'block';
+                    loadingEl.style.display = 'none';
+                    return;
+                }
+                
+                const sections = [];
+                for (const sectionId of selectedStudent.sections) {
+                    const data = await airtableRequest(`${CONFIG.TABLES.SECTIONS}/${sectionId}`);
+                    sections.push({
+                        id: data.id,
+                        name: data.fields['Section Name'] || 'Unnamed Section',
+                        sectionId: data.fields['Section ID']
+                    });
+                }
+                
+                displaySections(sections);
+                loadingEl.style.display = 'none';
+            } catch (error) {
+                console.error('Error loading sections:', error);
+                errorEl.textContent = 'Error loading sections: ' + error.message;
+                errorEl.style.display = 'block';
+                loadingEl.style.display = 'none';
+            }
+        }
+        
+        function displaySections(sections) {
+            const listEl = document.getElementById('sectionListContainer');
+            listEl.innerHTML = '';
+            
+            sections.forEach(section => {
+                const item = document.createElement('div');
+                item.className = 'section-item';
+                item.innerHTML = `<div class="section-name">${section.name}</div>`;
+                item.onclick = () => selectSection(section);
+                listEl.appendChild(item);
+            });
+        }
+        
+        async function selectSection(section) {
+            selectedSection = section;
+            
+            document.getElementById('gradeStudentInfo').innerHTML = `
+                <h2>${selectedStudent.name}</h2>
+                <p>${selectedSection.name}</p>
+            `;
+            
+            showScreen('gradeVisualizationScreen');
+            await loadGrades();
+        }
+        
+        async function loadGrades() {
+            const loadingEl = document.getElementById('loadingGrades');
+            const errorEl = document.getElementById('errorGrades');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            
+            try {
+                const requestBody = {
+                    studentId: selectedStudent.id,
+                    sectionId: selectedSection.sectionId
+                };
+                
+                const response = await fetch(CONFIG.N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const responseText = await response.text();
+
+                if (!response.ok) {
+                    let message = responseText;
+                    try {
+                        const errorJson = JSON.parse(responseText);
+                        message = errorJson?.message || errorJson?.error || response.statusText;
+                    } catch (jsonError) {
+                        if (!message) {
+                            message = response.statusText;
+                        }
+                    }
+                    throw new Error(`HTTP error ${response.status}: ${message}`);
+                }
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    throw new Error('Invalid JSON response from server');
+                }
+                
+                const assignments = normalizeGradePayload(data);
+
+                if (!assignments || assignments.length === 0) {
+                    const preview = responseText.slice(0, 250).trim();
+                    throw new Error('No grade data received from server. Response preview: ' + preview);
+                }
+
+                displayGrades(assignments);
+                loadingEl.style.display = 'none';
+            } catch (error) {
+                console.error('Error loading grades:', error);
+                errorEl.textContent = 'Error loading grades: ' + error.message;
+                errorEl.style.display = 'block';
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        function normalizeGradePayload(raw) {
+            const visited = new WeakSet();
+
+            function isAssignment(item) {
+                return item && typeof item === 'object' && (
+                    Object.prototype.hasOwnProperty.call(item, 'assignment_id') ||
+                    Object.prototype.hasOwnProperty.call(item, 'assignmentId')
+                );
+            }
+
+            function extract(node) {
+                if (node === null || node === undefined) {
+                    return [];
+                }
+
+                if (typeof node === 'string') {
+                    try {
+                        return extract(JSON.parse(node));
+                    } catch (error) {
+                        console.warn('Unable to parse string response as JSON', error);
+                        return [];
+                    }
+                }
+
+                if (typeof node === 'object') {
+                    if (visited.has(node)) {
+                        return [];
+                    }
+                    visited.add(node);
+                }
+
+                if (Array.isArray(node)) {
+                    if (node.length === 0) {
+                        return [];
+                    }
+
+                    if (node.every(isAssignment)) {
+                        return node;
+                    }
+
+                    return node.flatMap(extract);
+                }
+
+                if (typeof node === 'object') {
+                    if (Array.isArray(node.value)) {
+                        const direct = extract(node.value);
+                        if (direct.length > 0) {
+                            return direct;
+                        }
+                    }
+
+                    const nestedResults = Object.keys(node).flatMap(key => extract(node[key]));
+                    if (nestedResults.length > 0) {
+                        return nestedResults;
+                    }
+                }
+
+                return [];
+            }
+
+            const assignments = extract(raw);
+            return assignments.length > 0 ? assignments : null;
+        }
+
+        function displayGrades(assignments) {
+            const overall = assignments
+                .map(a => typeof a.section_grade === 'string' ? parseFloat(a.section_grade) : a.section_grade)
+                .filter(value => typeof value === 'number' && !Number.isNaN(value))
+                .pop();
+            document.getElementById('overallGrade').textContent = overall !== undefined ? `${overall}%` : '--';
+
+            const statsContainer = document.getElementById('statsContainer');
+            statsContainer.innerHTML = '';
+
+            if (!assignments || assignments.length === 0) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'stat';
+                emptyState.innerHTML = `
+                    <div class="stat-value">--</div>
+                    <div class="stat-label">No graded work yet</div>
+                `;
+                statsContainer.appendChild(emptyState);
+                createChart([]);
+                return;
+            }
+
+            const statsByType = {};
+            assignments.filter(a => a.points !== undefined).forEach(a => {
+                const type = a.assignment_type?.name || 'Other';
+                if (!statsByType[type]) {
+                    statsByType[type] = [];
+                }
+                const percentage = typeof a.assignment_percentage === 'string'
+                    ? parseFloat(a.assignment_percentage)
+                    : a.assignment_percentage;
+                if (typeof percentage === 'number' && !Number.isNaN(percentage)) {
+                    statsByType[type].push(percentage);
+                }
+            });
+
+            Object.keys(statsByType).forEach(type => {
+                const scores = statsByType[type];
+                const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+                const stat = document.createElement('div');
+                stat.className = 'stat';
+                const typeClass = type.toLowerCase();
+                stat.innerHTML = `
+                    <div class="stat-value ${typeClass}">${avg.toFixed(1)}%</div>
+                    <div class="stat-label">${type}</div>
+                `;
+                statsContainer.appendChild(stat);
+            });
+
+            createChart(assignments);
+        }
+
+        function createChart(assignments) {
+            if (!assignments || assignments.length === 0) {
+                if (chart) {
+                    chart.destroy();
+                    chart = null;
+                }
+                return;
+            }
+
+            const sortedAssignments = [...assignments]
+                .filter(a => a.points !== undefined)
+                .sort((a, b) => new Date(a.date_due || a.date_assigned || 0) - new Date(b.date_due || b.date_assigned || 0));
+
+            if (sortedAssignments.length === 0) {
+                if (chart) {
+                    chart.destroy();
+                    chart = null;
+                }
+                return;
+            }
+            
+            const assignmentTypes = [...new Set(sortedAssignments.map(a => a.assignment_type?.name || 'Other'))];
+
+            const allDates = [...new Set(sortedAssignments.map(a => {
+                const date = new Date(a.date_due || a.date_assigned);
+                if (Number.isNaN(date.getTime())) {
+                    return null;
+                }
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            }).filter(Boolean))];
+
+            const assignmentsByDate = {};
+            sortedAssignments.forEach(a => {
+                const date = new Date(a.date_due || a.date_assigned);
+                if (Number.isNaN(date.getTime())) {
+                    return;
+                }
+                const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+                if (!assignmentsByDate[dateLabel]) {
+                    assignmentsByDate[dateLabel] = {};
+                }
+                const typeName = a.assignment_type?.name || 'Other';
+                if (!assignmentsByDate[dateLabel][typeName]) {
+                    assignmentsByDate[dateLabel][typeName] = [];
+                }
+                assignmentsByDate[dateLabel][typeName].push(a);
+            });
+
+            function getDataForType(typeName, dates) {
+                return dates.map(dateLabel => {
+                    const assignmentsOnDate = assignmentsByDate[dateLabel]?.[typeName];
+                    if (!assignmentsOnDate || assignmentsOnDate.length === 0) {
+                        return null;
+                    }
+                    const validScores = assignmentsOnDate
+                        .map(a => typeof a.assignment_percentage === 'string'
+                            ? parseFloat(a.assignment_percentage)
+                            : a.assignment_percentage)
+                        .filter(score => typeof score === 'number' && !Number.isNaN(score));
+                    if (validScores.length === 0) {
+                        return null;
+                    }
+                    const avg = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+                    return avg;
+                });
+            }
+            
+            const colorMap = {
+                'Exam': { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+                'Quiz': { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+                'Homework': { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+            };
+            
+            const defaultColors = [
+                { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+                { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
+                { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
+                { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)' }
+            ];
+            
+            let defaultColorIndex = 0;
+            
+            const datasets = assignmentTypes.map((typeName) => {
+                let colors;
+                if (colorMap[typeName]) {
+                    colors = colorMap[typeName];
+                } else {
+                    colors = defaultColors[defaultColorIndex % defaultColors.length];
+                    defaultColorIndex++;
+                }
+                
+                return {
+                    label: typeName,
+                    data: getDataForType(typeName, allDates),
+                    borderColor: colors.border,
+                    backgroundColor: colors.bg,
+                    tension: 0.3,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    spanGaps: true
+                };
+            });
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: allDates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: { size: 14 },
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            bodyFont: { size: 13 },
+                            titleFont: { size: 14, weight: 'bold' },
+                            displayColors: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return 'Date: ' + context[0].label;
+                                },
+                                beforeBody: function() {
+                                    return '';
+                                },
+                                afterBody: function(context) {
+                                    const dateLabel = context[0].label;
+                                    const allAssignmentsOnDate = assignmentsByDate[dateLabel];
+                                    
+                                    if (!allAssignmentsOnDate) return [];
+                                    
+                                    const lines = [];
+                                    
+                                    Object.keys(allAssignmentsOnDate).forEach(typeName => {
+                                        const assignments = allAssignmentsOnDate[typeName];
+                                        assignments.forEach((assignment) => {
+                                            if (lines.length > 0) {
+                                                lines.push('');
+                                            }
+                                            
+                                            lines.push(assignment.short_description || 'Untitled Assignment');
+                                            const score = typeof assignment.assignment_percentage === 'string'
+                                                ? parseFloat(assignment.assignment_percentage)
+                                                : assignment.assignment_percentage;
+                                            const formattedScore = typeof score === 'number' && !Number.isNaN(score)
+                                                ? `${score.toFixed(1)}%`
+                                                : '--';
+                                            lines.push(`${typeName}: ${formattedScore}`);
+                                            
+                                            const flags = [];
+                                            if (assignment.missing) flags.push('MISSING');
+                                            if (assignment.late) flags.push('LATE');
+                                            if (assignment.incomplete) flags.push('INCOMPLETE');
+                                            if (assignment.exempt) flags.push('EXEMPT');
+                                            
+                                            if (flags.length > 0) {
+                                                lines.push('⚠ ' + flags.join(', '));
+                                            }
+                                        });
+                                    });
+                                    
+                                    return lines;
+                                },
+                                label: function() {
+                                    return '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 105,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value === 105) return '';
+                                    return value + '%';
+                                },
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: { size: 11 },
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+        
+        function goToStudentSearch() {
+            showScreen('studentSearchScreen');
+        }
+        
+        function goToSectionSelection() {
+            showScreen('sectionSelectionScreen');
+        }
+        
+        window.onload = function() {
+            loadStudents();
+        };
+    </script>
+</body>
+</html>
