@@ -583,6 +583,23 @@
         let studentsLoadingPromise = null;
         let currentSectionSearchTerm = '';
 
+        function toSearchableString(value) {
+            if (value === undefined || value === null) {
+                return '';
+            }
+            if (Array.isArray(value)) {
+                return value
+                    .map(item => toSearchableString(item))
+                    .filter(Boolean)
+                    .join(' ');
+            }
+            if (typeof value === 'object') {
+                const fallback = value.name ?? value.label ?? value.id;
+                return fallback ? toSearchableString(fallback) : '';
+            }
+            return String(value).toLowerCase();
+        }
+
         const categoryFiltersEl = document.getElementById('categoryFilters');
         const categoryFiltersListEl = document.getElementById('categoryFiltersList');
         const chartEmptyStateEl = document.getElementById('chartEmptyState');
@@ -1019,11 +1036,28 @@
                     id: record.id,
                     sectionId: record.fields['Section ID'] ?? null,
                     name: record.fields['Section Name'] || 'Unnamed Section',
-                    teacherName: record.fields['Name (from Teacher Name)'] || '',
-                    blockDescription: record.fields['Block Description'] || '',
+                    teacherName: (() => {
+                        const value = record.fields['Name (from Teacher Name)'];
+                        if (Array.isArray(value)) {
+                            return value.filter(Boolean).join(', ');
+                        }
+                        return value || '';
+                    })(),
+                    blockDescription: (() => {
+                        const value = record.fields['Block Description'];
+                        if (Array.isArray(value)) {
+                            return value.filter(Boolean).join(', ');
+                        }
+                        return value || '';
+                    })(),
                     blockNumber: record.fields['Block Number'] || '',
                     studentRosterIds: record.fields['Student Roster'] || []
                 })).sort((a, b) => a.name.localeCompare(b.name));
+
+                const sectionSearchInput = document.getElementById('sectionSearch');
+                if (sectionSearchInput) {
+                    currentSectionSearchTerm = sectionSearchInput.value || '';
+                }
 
                 applySectionFilter();
             } catch (error) {
@@ -1091,10 +1125,10 @@
 
             const term = value.toLowerCase();
             return allSections.filter(section => {
-                const name = section.name ? section.name.toLowerCase() : '';
-                const teacher = section.teacherName ? section.teacherName.toLowerCase() : '';
-                const block = section.blockDescription ? section.blockDescription.toLowerCase() : '';
-                const sectionId = section.sectionId != null ? String(section.sectionId) : '';
+                const name = toSearchableString(section.name);
+                const teacher = toSearchableString(section.teacherName);
+                const block = toSearchableString(section.blockDescription);
+                const sectionId = toSearchableString(section.sectionId);
                 return name.includes(term) || teacher.includes(term) || block.includes(term) || sectionId.includes(term);
             }).sort((a, b) => a.name.localeCompare(b.name));
         }
